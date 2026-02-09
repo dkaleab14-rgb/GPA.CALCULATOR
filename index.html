@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>University GPA Calculator</title>
+<style>
+:root{ --bg:#f4f4f4;--text:#000;--card:#fff; }
+body.dark{ --bg:#121212;--text:#fff;--card:#1e1e1e; }
+body{ margin:0;font-family:Arial;background:var(--bg);color:var(--text); transition:.4s; }
+.container{ max-width:900px;margin:30px auto;background:var(--card); padding:20px;border-radius:10px; box-shadow:0 0 15px rgba(0,0,0,.2); animation:fade .7s; }
+@keyframes fade{ from{opacity:0;transform:translateY(20px)} to{opacity:1} }
+h2{text-align:center}
+table{width:100%;border-collapse:collapse;margin-top:10px}
+th,td{border:1px solid #aaa;padding:8px;text-align:center}
+input,select,button{ padding:6px;margin:4px;border-radius:5px;border:1px solid #aaa; }
+button{cursor:pointer}
+.top{ display:flex;justify-content:space-between;align-items:center }
+.result{margin-top:15px; padding:15px; border-radius:8px;}
+.msg-box { font-size: 1.2rem; margin-bottom: 10px; padding: 15px; border-radius: 5px; text-align: center; font-weight: bold;}
+.good{ background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+.bad{ background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+
+#gradeSection{ display:none; margin-top:15px; border-top:2px dashed #aaa; padding-top:10px; }
+.row-excellent { background-color: #d4edda !important; color: #155724; } 
+.row-good { background-color: #e2f3f5 !important; color: #0c5460; }      
+.row-pass { background-color: #fff3cd !important; color: #856404; }      
+.row-fail { background-color: #f8d7da !important; color: #721c24; }      
+</style>
+</head>
+<body>
+
+<div class="container">
+    <div class="top">
+        <h2>University GPA Calculator</h2>
+        <button onclick="toggleDark()">🌙</button>
+    </div>
+
+    <button onclick="toggleGrades()">Manage Grade Scale</button>
+
+    <div id="gradeSection">
+        <h3>Official Grade Scale (From Image)</h3>
+        <table>
+            <tr><th>Min Score</th><th>Grade</th><th>Point</th></tr>
+            <tbody id="gradeScale"></tbody>
+        </table>
+    </div>
+
+    <h3>Courses</h3>
+    <table id="courseTable">
+        <thead><tr><th>Course Name</th><th>Credit</th><th>Raw Score (%)</th></tr></thead>
+        <tbody id="courseBody"></tbody>
+    </table>
+
+    <button onclick="addCourse()">+ Add Course</button>
+    <button onclick="calculate()" style="background:#4CAF50; color:white; font-weight:bold; padding: 10px 20px;">Calculate GPA</button>
+    <button onclick="clearAll()" style="background:#f44336; color:white;">Clear All Data</button>
+    <button onclick="downloadPDF()">Download PDF</button>
+
+    <div id="output" class="result"></div>
+</div>
+
+<script>
+const gradeScales=[
+  {min:90, g:'A+', p:4.0}, {min:85, g:'A',  p:4.0}, {min:80, g:'A-', p:3.75},
+  {min:75, g:'B+', p:3.5}, {min:70, g:'B',  p:3.0}, {min:65, g:'B-', p:2.75},
+  {min:60, g:'C+', p:2.5}, {min:50, g:'C',  p:2.0}, {min:45, g:'C-', p:1.75},
+  {min:40, g:'D',  p:1.0}, {min:30, g:'Fx', p:0},   {min:0,  g:'F',  p:0}
+];
+
+window.onload = () => {
+    renderGrades();
+    loadData();
+};
+
+function toggleDark(){ document.body.classList.toggle("dark"); }
+function toggleGrades(){ 
+    const g=document.getElementById("gradeSection");
+    g.style.display = g.style.display==="none" ? "block" : "none";
+}
+
+function renderGrades(){
+    const g=document.getElementById("gradeScale");
+    gradeScales.forEach(x=>{
+        g.innerHTML+=`<tr><td>${x.min}</td><td>${x.g}</td><td>${x.p}</td></tr>`;
+    });
+}
+
+function addCourse(name='', cred='', score=''){
+    const tbody = document.getElementById("courseBody");
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+        <td><input value="${name}" oninput="saveData()" placeholder="e.g. Physics"></td>
+        <td><input type="number" value="${cred}" oninput="saveData()" placeholder="0"></td>
+        <td><input type="number" value="${score}" oninput="saveData()" placeholder="0"></td>
+    `;
+    tbody.appendChild(tr);
+    saveData();
+}
+
+function saveData(){
+    let courses = [];
+    document.querySelectorAll("#courseBody tr").forEach(r => {
+        const inputs = r.querySelectorAll("input");
+        courses.push({ n: inputs[0].value, c: inputs[1].value, s: inputs[2].value });
+    });
+    localStorage.setItem("university_gpa_data", JSON.stringify(courses));
+}
+
+function loadData(){
+    const data = JSON.parse(localStorage.getItem("university_gpa_data"));
+    const tbody = document.getElementById("courseBody");
+    tbody.innerHTML = ""; 
+    if(data && data.length > 0){
+        data.forEach(c => addCourse(c.n, c.c, c.s));
+    } else {
+        addCourse();
+    }
+}
+
+function clearAll(){
+    if(confirm("Wipe all data?")){
+        localStorage.removeItem("university_gpa_data");
+        document.getElementById("courseBody").innerHTML = "";
+        document.getElementById("output").innerHTML = "";
+        addCourse();
+    }
+}
+
+function getGrade(score){
+    return gradeScales.sort((a,b)=>b.min-a.min).find(x=>score>=x.min);
+}
+
+function calculate(){
+    let totalPoints=0, totalCredits=0, detailRows="";
+    const rows = document.querySelectorAll("#courseBody tr");
+
+    rows.forEach(r=>{
+        const inputs = r.querySelectorAll("input");
+        let n = inputs[0].value;
+        let c = parseFloat(inputs[1].value);
+        let s = parseFloat(inputs[2].value);
+        if(!n || isNaN(c) || isNaN(s)) return;
+        
+        let g = getGrade(s);
+        totalPoints += (g.p * c);
+        totalCredits += c;
+
+        let rowColor = g.p >= 3.75 ? "row-excellent" : (g.p >= 2.75 ? "row-good" : (g.p >= 1.0 ? "row-pass" : "row-fail"));
+        detailRows += `<tr class="${rowColor}"><td>${n}</td><td>${c}</td><td>${s}</td><td>${g.g}</td><td>${g.p}</td></tr>`;
+    });
+
+    if(totalCredits === 0) return alert("Please enter your course data first!");
+    
+    let gpa = (totalPoints / totalCredits).toFixed(2);
+    
+    // Feedback Logic based on your request
+    let feedback = gpa >= 3.00 
+        ? `<div class="msg-box good">🎉 Excellent Work! You reached a GPA of ${gpa}. We appreciate your dedication!</div>`
+        : `<div class="msg-box bad">💡 Your GPA is ${gpa}. Don't lose heart—work hard and focus more next semester to improve!</div>`;
+
+    document.getElementById("output").innerHTML = `
+        <hr>
+        ${feedback}
+        <table>
+            <tr style="background:#333; color:#fff;"><th>Course</th><th>Credit</th><th>Score</th><th>Grade</th><th>Point</th></tr>
+            ${detailRows}
+        </table>`;
+}
+
+function downloadPDF(){
+    let content = document.getElementById("output").innerHTML;
+    if(!content) return alert("Calculate your GPA first!");
+    let win = window.open("");
+    win.document.write(`<html><head><style>table{width:100%;border-collapse:collapse;} th,td{border:1px solid #000;padding:8px;text-align:center;} .row-excellent{background:#d4edda} .row-good{background:#e2f3f5} .row-pass{background:#fff3cd} .row-fail{background:#f8d7da}</style></head><body>${content}</body></html>`);
+    win.document.close();
+    win.print();
+}
+</script>
+</body>
+</html>
